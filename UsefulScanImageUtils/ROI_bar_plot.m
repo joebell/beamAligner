@@ -4,20 +4,24 @@ classdef ROI_bar_plot < handle
     % This class adds listeners to ScanImage so you don't need to manually
     % add stuff to the user function interface. 
     %
+    % Known issues:
+    % Works in data from the first displayed channel but uses the look up table
+    % from channel 1 always
+    %
     % Instructions
     % Start ScanImage
     % Run ROI_bar_plot
-    % Then press Focus in ScanImage
+    % Then press Focus or Grab in ScanImage
     %
     % 
     % Closing the ROI bar figure shuts down the class and detachs the listeners
-    
+
     properties
        showMeans = true % set to false to not show mean values
        norm=false; %normalize if true
        meanROIsSaved
     end
-    
+
     properties (Hidden)
        hSI % ScanImage API
        hFig % The figure window
@@ -52,7 +56,9 @@ classdef ROI_bar_plot < handle
 
             % Add listeners
             obj.listeners{end+1}=addlistener(obj.hSI.hUserFunctions, 'frameAcquired', @obj.updateBars);
-            obj.listeners{end+1}=addlistener(obj.hSI.hUserFunctions, 'focusStart', @obj.setUpPlot);
+            %obj.listeners{end+1}=addlistener(obj.hSI.hUserFunctions, 'focusStart', @obj.setUpPlot);
+            obj.listeners{end+1}=addlistener(obj.hSI.hUserFunctions, 'acqModeStart', @obj.setUpPlot);
+
 
             % Only create a plot window if one does not already exist 
             % (want to avoid writing into existing windows that are doing other stuff)
@@ -62,12 +68,12 @@ classdef ROI_bar_plot < handle
                 obj.hFig = figure;
                 set(obj.hFig, 'Tag', obj.figTagName, 'Name', 'ROI bar plot')
             end
-            
+
             %Focus on the figure and clear it
             figure(obj.hFig)
             clf
             obj.hAx = cla;
-            
+
             obj.hFig.CloseRequestFcn = @obj.windowCloseFcn;
 
         end % Constructor
@@ -87,21 +93,21 @@ classdef ROI_bar_plot < handle
 
        function setUpPlot(obj,~,~)
             % Runs on 'focusStart'
-            
+
             %Focus on the figure window
             figure(obj.hFig)
-                            
+
             numRois = numel(obj.hSI.hRoiManager.roiGroupMroi.rois);
             meanRois = zeros(numRois+1,1);
             obj.hBar = bar(meanRois,'parent',obj.hAx); %plot into our figure window
             yLimit = obj.hSI.hChannels.channelLUT{1};
             ylim(yLimit);
-            
+
             for ii = numRois+1:-1:1
-                obj.meanText(ii)=text(ii,double(yLimit(2))*0.9,'', ...
+                obj.meanText{ii}=text(ii,double(yLimit(2))*0.9,'', ...
                     'HorizontalAlignment','center', 'FontSize', 13, 'Color',[.9 .9 .9]);
             end
-            set(obj.meanText(end), 'Color', 'r')            
+            set(obj.meanText{end}, 'Color', 'r')            
             set(gca,'Color', 'k')
 
        end
@@ -114,16 +120,20 @@ classdef ROI_bar_plot < handle
             numRD = length(obj.hSI.hDisplay.rollingStripeDataBuffer{1}{1}.roiData);
 
             for iRSDB = 1:numRSDB
-                 for iRD = 1:numRD
-                     iRoi = (iRSDB-1)*numRD + iRD;
-                     meanRois(iRoi) = mean(obj.hSI.hDisplay.rollingStripeDataBuffer{iRSDB}{1}.roiData{iRD}.imageData{1}{1}(:))/obj.hSI.hDisplay.displayRollingAverageFactor;
+                 for iRD = 1:numRD %Loop over ROIs
+                    iRoi = (iRSDB-1)*numRD + iRD;
+                    tROIdata = obj.hSI.hDisplay.rollingStripeDataBuffer{iRSDB}{1}.roiData;
+                    if isempty(tROIdata) %On the first frame this may be empty
+                        continue
+                    end
+                    meanRois(iRoi) = mean(tROIdata{iRD}.imageData{1}{1}(:))/obj.hSI.hDisplay.displayRollingAverageFactor;
                  end
             end
 
             meanRois(end) = mean(meanRois(1:numRois));
 
             if obj.norm
-                meanRois = meanRois./obj.meanRoisSaved;
+                meanRois = meanROIsSaved./obj.meanRoisSaved;
                 yLimit = [.75, 1.25];
                 ch = get(gca,'Children');
                 for i = 1:numRois+1
@@ -133,13 +143,13 @@ classdef ROI_bar_plot < handle
              else
                 yLimit = obj.hSI.hChannels.channelLUT{1};
                 obj.meanROIsSaved = meanRois;
-                
+
                 if obj.showMeans
                     for ii = 1:length(obj.meanText)
                         yPos = meanRois(ii)*1.2;
                         %yPos=double(yLimit(2))*0.9; %Fixed ypos
-                         set(obj.meanText(ii),'Position',[ii yPos], ...
-                             'String',sprintf('%.0f',meanRois(ii)))
+                        set(obj.meanText{ii},'Position',[ii yPos], ...
+                            'String',sprintf('%.0f',meanRois(ii)))
                     end
                 end
             end
@@ -149,6 +159,6 @@ classdef ROI_bar_plot < handle
              %set(get(hBar,'Parent'),'ylim',(obj.hSI.hChannels.channelLUT{1}));
              %sprintf('%.2f', meanRois(end))
        end % updateBars
-       
+
     end %methods
 end % classdef
