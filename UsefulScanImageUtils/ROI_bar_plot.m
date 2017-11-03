@@ -10,9 +10,16 @@ classdef ROI_bar_plot < handle
     %
     % Instructions
     % Start ScanImage
-    % Run ROI_bar_plot
-    % Then press Focus or Grab in ScanImage
+    % Run ROI_bar_plot: R=ROI_bar_plot
+    % Then press Grab (or maybe Focus) in ScanImage
     %
+    % To enable normalised mode do:
+    % R.norm=true;
+    %
+    % To disable it:
+    % R.norm=false;
+    %
+    % Re-enabling it will reset the value by which it is normalising.
     % 
     % Closing the ROI bar figure shuts down the class and detachs the listeners
 
@@ -133,8 +140,11 @@ classdef ROI_bar_plot < handle
             meanRois(end) = mean(meanRois(1:numRois));
 
             if obj.norm
-                meanRois = meanROIsSaved./obj.meanRoisSaved;
-                yLimit = [.75, 1.25];
+                if isempty(obj.meanROIsSaved)
+                    obj.meanROIsSaved = meanRois;
+                end
+                meanRois = meanRois./obj.meanROIsSaved;
+                yLimit = [.25, 1.5];
                 ch = get(gca,'Children');
                 for i = 1:numRois+1
                     set(ch(i),'Position',[i double(yLimit(2))*0.9])
@@ -142,7 +152,7 @@ classdef ROI_bar_plot < handle
                 end
              else
                 yLimit = obj.hSI.hChannels.channelLUT{1};
-                obj.meanROIsSaved = meanRois;
+                obj.meanROIsSaved = [];
 
                 if obj.showMeans
                     for ii = 1:length(obj.meanText)
